@@ -1,0 +1,1 @@
+ALTER TABLE `link_redirects` ADD `password` text(256);
