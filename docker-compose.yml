@@ -23,7 +23,9 @@ services:
     build:
       context: .
       target: migrate
-    image: gohop-migrate:latest
+    # Always built on the host. No `image:` name, so `compose pull` (which
+    # Portainer runs on redeploy) has nothing to try to pull from Docker Hub.
+    pull_policy: build
     environment:
       <<: *app-env
     volumes:
@@ -37,7 +39,7 @@ services:
       args:
         NEXT_PUBLIC_ADSENSE_CLIENT: ${NEXT_PUBLIC_ADSENSE_CLIENT:-}
         NEXT_PUBLIC_ADSENSE_SLOT: ${NEXT_PUBLIC_ADSENSE_SLOT:-}
-    image: gohop:latest
+    pull_policy: build
     restart: unless-stopped
     depends_on:
       migrate:
