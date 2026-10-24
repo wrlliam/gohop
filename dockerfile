@@ -6,7 +6,9 @@
 # ---------------------------------------------------------------- base
 FROM node:22-bookworm-slim AS base
 # Node runs `next build`; bun is only the package manager.
-RUN npm install -g bun@1
+# Copied from the official image rather than `npm install -g bun`, which pulls a
+# platform binary through npm and fails on hosts with restricted/odd networking.
+COPY --from=oven/bun:1 /usr/local/bin/bun /usr/local/bin/bun
 WORKDIR /app
 
 # ---------------------------------------------------------------- deps
