@@ -17,8 +17,10 @@ FROM base AS deps
 RUN apt-get update \
  && apt-get install -y --no-install-recommends python3 make g++ \
  && rm -rf /var/lib/apt/lists/*
-COPY package.json bun.lock* bun.lockb* ./
-RUN bun install --frozen-lockfile
+COPY package.json bun.lock* bun.lockb* package-lock.json* ./
+# Normal path: bun. If the build host's CPU can't run bun (no AVX2, e.g. a Proxmox VM
+# using the default CPU type), commit a package-lock.json and npm is used instead.
+RUN if [ -f package-lock.json ]; then npm ci; else bun install --frozen-lockfile; fi
 
 # ---------------------------------------------------------------- builder
 FROM base AS builder
