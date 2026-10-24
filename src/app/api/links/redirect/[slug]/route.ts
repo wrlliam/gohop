@@ -71,6 +71,9 @@ async function serve(req: NextRequest, slug: string, link: LinkRow) {
     monetised: link.monetisationEnabled,
     url: link.redirectedLink,
     ...result,
+    // The browser sends these back once an ad has really been shown.
+    viewId: recorded.viewId,
+    impressionToken: recorded.impressionToken,
   });
 }
 

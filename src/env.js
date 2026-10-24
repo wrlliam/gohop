@@ -20,6 +20,7 @@ export const env = createEnv({
     STRIPE_SECRET_KEY: z.string(),
     STRIPE_WEBHOOK_SECRET: z.string(),
     VISITOR_HASH_SALT: z.string(),
+    ADMIN_API_SECRET: z.string().min(32),
   },
 
   /**
@@ -29,6 +30,8 @@ export const env = createEnv({
    */
   client: {
     // NEXT_PUBLIC_CLIENTVAR: z.string(),
+    NEXT_PUBLIC_ADSENSE_CLIENT: z.string().optional(),
+    NEXT_PUBLIC_ADSENSE_SLOT: z.string().optional(),
   },
 
   /**
@@ -45,6 +48,9 @@ export const env = createEnv({
     STRIPE_SECRET_KEY: process.env.STRIPE_SECRET_KEY,
     STRIPE_WEBHOOK_SECRET: process.env.STRIPE_WEBHOOK_SECRET,
     VISITOR_HASH_SALT: process.env.VISITOR_HASH_SALT,
+    ADMIN_API_SECRET: process.env.ADMIN_API_SECRET,
+    NEXT_PUBLIC_ADSENSE_CLIENT: process.env.NEXT_PUBLIC_ADSENSE_CLIENT,
+    NEXT_PUBLIC_ADSENSE_SLOT: process.env.NEXT_PUBLIC_ADSENSE_SLOT,
   },
   /**
    * Run `build` or `dev` with `SKIP_ENV_VALIDATION` to skip env validation. This is especially

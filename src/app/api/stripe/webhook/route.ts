@@ -25,7 +25,7 @@ export async function POST(req: NextRequest) {
   }
 
   if (event.type === "account.updated") {
-    await syncPayoutAccount((event.data.object as Stripe.Account).id);
+    await syncPayoutAccount(event.data.object.id);
   }
 
   return NextResponse.json({ received: true });

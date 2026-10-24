@@ -27,7 +27,8 @@ async function requireUser() {
   return session.user;
 }
 
-const appUrl = () => process.env.APP_URL ?? "http://localhost:3000";
+const appUrl = () =>
+  process.env.APP_URL ?? process.env.BETTER_AUTH_URL ?? "http://localhost:3000";
 
 // Must match the route folder of the page (src/app/app/<this>/page.tsx).
 const PAGE_PATH = "/app/monitization";

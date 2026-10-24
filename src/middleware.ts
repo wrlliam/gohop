@@ -3,7 +3,11 @@ import { getSessionCookie } from "better-auth/cookies";
 
 // - link lookup: anyone with a shared link must be able to use it
 // - finalise-period: authenticates itself with ADMIN_API_SECRET
-const PUBLIC_PREFIXES = ["/api/links/redirect/", "/api/admin/finalise-period"];
+const PUBLIC_PREFIXES = [
+  "/api/links/redirect/",
+  "/api/admin/finalise-period",
+  "/api/links/impression",
+];
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;

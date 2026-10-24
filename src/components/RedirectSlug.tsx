@@ -1,5 +1,6 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
+import Script from "next/script";
 import { Button } from "~/components/ui/button";
 
 type ApiResponse =
@@ -9,6 +10,8 @@ type ApiResponse =
       url: string;
       ok: boolean;
       reasons: string[];
+      viewId?: number;
+      impressionToken?: string | null;
     }
   | { status: "password_required"; monetised: boolean }
   | { status: "wrong_password" }
@@ -17,15 +20,19 @@ type ApiResponse =
   | { status: "limit_reached" }
   | { status: "not_found" };
 
+type Impression = { viewId: number; token: string };
+
 type State =
   | { phase: "checking" }
-  | { phase: "redirecting"; url: string }
+  | { phase: "redirecting"; url: string; impression?: Impression }
   | { phase: "password"; error?: string; submitting?: boolean }
   | { phase: "warning"; url: string; reasons: string[] }
   | { phase: "unavailable"; reason: "expired" | "limit_reached" | "not_found" }
   | { phase: "error" };
 
-const MIN_DISPLAY_MS = 1500; // 1.5s
+const MIN_DISPLAY_MS = 1500; // page shown at least this long (no ad / unmonetised)
+const AD_VISIBLE_MS = 1500; // a filled ad must be on screen this long before we confirm it
+const AD_MAX_WAIT_MS = 6000; // give up waiting for an ad and just redirect
 
 const isHttpUrl = (u: string) => /^https?:\/\//i.test(u);
 
@@ -55,23 +62,29 @@ export function RedirectSlug({ slug }: { slug: string }) {
   const [state, setState] = useState<State>({ phase: "checking" });
   const [password, setPassword] = useState("");
   const [monetised, setMonetised] = useState(false);
-  const timerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const [adFilled, setAdFilled] = useState(false);
   const ctrlRef = useRef<AbortController | null>(null);
+  const startedRef = useRef(Date.now());
 
-  const apply = useCallback((data: ApiResponse, started: number) => {
+  const onFilled = useCallback(() => setAdFilled(true), []);
+
+  const apply = useCallback((data: ApiResponse) => {
     if ("monetised" in data) setMonetised(data.monetised);
+
     switch (data.status) {
       case "ok": {
         if (!data.ok) {
           setState({ phase: "warning", url: data.url, reasons: data.reasons });
           return;
         }
-        setState({ phase: "redirecting", url: data.url });
-        const wait = Math.max(0, MIN_DISPLAY_MS - (Date.now() - started));
-        timerRef.current = setTimeout(
-          () => window.location.replace(data.url),
-          wait,
-        );
+        setState({
+          phase: "redirecting",
+          url: data.url,
+          impression:
+            data.viewId && data.impressionToken
+              ? { viewId: data.viewId, token: data.impressionToken }
+              : undefined,
+        });
         return;
       }
       case "password_required":
@@ -99,11 +112,11 @@ export function RedirectSlug({ slug }: { slug: string }) {
       ctrlRef.current?.abort();
       const ctrl = new AbortController();
       ctrlRef.current = ctrl;
-      const started = Date.now();
+      startedRef.current = Date.now();
 
       try {
         const data = await requestLink(slug, pw, ctrl.signal);
-        if (!ctrl.signal.aborted) apply(data, started);
+        if (!ctrl.signal.aborted) apply(data);
       } catch {
         if (!ctrl.signal.aborted) setState({ phase: "error" });
       }
@@ -113,11 +126,44 @@ export function RedirectSlug({ slug }: { slug: string }) {
 
   useEffect(() => {
     void run();
-    return () => {
-      ctrlRef.current?.abort();
-      clearTimeout(timerRef.current);
-    };
+    return () => ctrlRef.current?.abort();
   }, [run]);
+
+  // Redirect logic. Monetised links wait for an ad to be shown so the view can
+  // be confirmed; everything else just waits out the minimum display time.
+  useEffect(() => {
+    if (state.phase !== "redirecting") return;
+    const { url, impression } = state;
+    let timer: ReturnType<typeof setTimeout>;
+
+    if (!impression) {
+      const wait = Math.max(
+        0,
+        MIN_DISPLAY_MS - (Date.now() - startedRef.current),
+      );
+      timer = setTimeout(() => window.location.replace(url), wait);
+    } else if (adFilled) {
+      const confirmThenGo = async () => {
+        try {
+          await fetch("/api/links/impression", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(impression),
+            keepalive: true,
+            signal: AbortSignal.timeout(2000),
+          });
+        } catch {
+          // Never block the visitor on this.
+        }
+        window.location.replace(url);
+      };
+      timer = setTimeout(() => void confirmThenGo(), AD_VISIBLE_MS);
+    } else {
+      timer = setTimeout(() => window.location.replace(url), AD_MAX_WAIT_MS);
+    }
+
+    return () => clearTimeout(timer);
+  }, [state, adFilled]);
 
   const submitPassword = (e: React.FormEvent) => {
     e.preventDefault();
@@ -194,7 +240,10 @@ export function RedirectSlug({ slug }: { slug: string }) {
                 </p>
               )}
               <div className="flex flex-row gap-3">
-                <Button type="submit" disabled={state.submitting || !password}>
+                <Button
+                  type="submit"
+                  disabled={!!state.submitting || !password}
+                >
                   {state.submitting ? "Checking…" : "Unlock"}
                 </Button>
                 <Button
@@ -278,25 +327,109 @@ export function RedirectSlug({ slug }: { slug: string }) {
 
       {monetised && (
         <div className="absolute bottom-6 left-1/2 w-[calc(100vw-2rem)] max-w-[728px] -translate-x-1/2">
-          <AdSlot />
+          <AdSlot onFilled={onFilled} />
         </div>
       )}
     </div>
   );
 }
 
-export function AdSlot({ children }: { children?: React.ReactNode }) {
+/**
+ * Real AdSense unit when NEXT_PUBLIC_ADSENSE_CLIENT / _SLOT are set, otherwise
+ * a placeholder. `onFilled` fires only when AdSense reports the slot as filled,
+ * which is what lets a view become billable.
+ *
+ * Only mount this after the visitor has accepted advertising cookies where the
+ * law requires it (UK/EEA): gate it with your consent state.
+ */
+export function AdSlot({
+  children,
+  onFilled,
+}: {
+  children?: React.ReactNode;
+  onFilled?: () => void;
+}) {
+  const client = process.env.NEXT_PUBLIC_ADSENSE_CLIENT;
+  const slot = process.env.NEXT_PUBLIC_ADSENSE_SLOT;
+  const configured = !!client && !!slot;
+  const devFill =
+    process.env.NODE_ENV !== "production" &&
+    process.env.NEXT_PUBLIC_ADS_DEV_FILL === "true";
+  const insRef = useRef<HTMLModElement>(null);
+
+  useEffect(() => {
+    if (!configured) {
+      // Local testing without a real ad account.
+      if (devFill) {
+        const t = setTimeout(() => onFilled?.(), 500);
+        return () => clearTimeout(t);
+      }
+      return;
+    }
+
+    const ins = insRef.current;
+    if (!ins) return;
+
+    const check = () => {
+      if (ins.getAttribute("data-ad-status") === "filled") {
+        onFilled?.();
+        return true;
+      }
+      return false;
+    };
+
+    const observer = new MutationObserver(() => {
+      if (check()) observer.disconnect();
+    });
+    observer.observe(ins, {
+      attributes: true,
+      attributeFilter: ["data-ad-status"],
+    });
+
+    try {
+      const w = window as unknown as { adsbygoogle?: unknown[] };
+      (w.adsbygoogle = w.adsbygoogle ?? []).push({});
+    } catch {
+      // Ad blockers or script errors: the slot just stays unfilled.
+    }
+
+    return () => observer.disconnect();
+  }, [configured, devFill, onFilled]);
+
   return (
     <aside
       aria-label="Advertisement"
       className="flex flex-col items-center gap-1"
     >
+      {configured && (
+        <Script
+          id="adsense-loader"
+          async
+          strategy="afterInteractive"
+          crossOrigin="anonymous"
+          src={`https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${client}`}
+        />
+      )}
       <span className="text-stone text-[10px] font-semibold tracking-widest uppercase">
         Advertisement
       </span>
-      <div className="border-stone/30 text-stone flex h-[90px] w-full items-center justify-center rounded-lg border border-dashed text-xs font-semibold">
-        {children ?? "Your ad here"}
-      </div>
+      {configured ? (
+        <div className="min-h-[90px] w-full overflow-hidden">
+          <ins
+            ref={insRef}
+            className="adsbygoogle"
+            style={{ display: "block" }}
+            data-ad-client={client}
+            data-ad-slot={slot}
+            data-ad-format="horizontal"
+            data-full-width-responsive="true"
+          />
+        </div>
+      ) : (
+        <div className="border-stone/30 text-stone flex h-[90px] w-full items-center justify-center rounded-lg border border-dashed text-xs font-semibold">
+          {children ?? "Your ad here"}
+        </div>
+      )}
     </aside>
   );
 }

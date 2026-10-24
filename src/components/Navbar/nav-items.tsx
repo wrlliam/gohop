@@ -5,7 +5,6 @@ export const GITHUB_LINK = "https://github.com/wrlliam/gohop";
 
 export const NAV_ITEMS = [
   { text: "Home", href: "/" },
-  { text: "About", href: "/" },
   { text: "Getting Started", href: "/login" },
 ];
 

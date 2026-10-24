@@ -21,9 +21,12 @@ export async function resolveLink(slug: string): Promise<ResolvedLink> {
   });
 
   // Inactive links look identical to missing ones, so owners can't be probed.
-  if (!link || !link.isActive) return { status: "not_found" };
+  if (!link?.isActive) return { status: "not_found" };
 
-  if (link.expiresAt && link.expiresAt.getTime() <= Date.now()) {
+  // A stored value of 0 (1 Jan 1970) means "never expires" in this app; only a
+  // real, past date counts as expired.
+  const expiresMs = link.expiresAt?.getTime() ?? 0;
+  if (expiresMs > 0 && expiresMs <= Date.now()) {
     return { status: "expired" };
   }
 

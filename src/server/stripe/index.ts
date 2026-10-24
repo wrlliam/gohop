@@ -2,13 +2,26 @@ import Stripe from "stripe";
 import { eq } from "drizzle-orm";
 import { db } from "~/server/db";
 import { payoutAccount } from "~/server/db/schema";
-import { env } from "~/env";
 
-if (!process.env.STRIPE_SECRET_KEY) {
-  throw new Error("STRIPE_SECRET_KEY is not set");
+let client: Stripe | undefined;
+
+/**
+ * Created on first use, not at import time: `next build` imports route files
+ * in an environment that has no secrets, and must not fail because of that.
+ */
+function getStripe(): Stripe {
+  if (!client) {
+    const key = process.env.STRIPE_SECRET_KEY;
+    if (!key) throw new Error("STRIPE_SECRET_KEY is not set");
+    client = new Stripe(key);
+  }
+  return client;
 }
 
-export const stripe = new Stripe(env.STRIPE_SECRET_KEY);
+// Same `stripe.accounts.create(...)` call style as before, but lazy.
+export const stripe = new Proxy({} as Stripe, {
+  get: (_target, prop) => Reflect.get(getStripe(), prop) as unknown,
+});
 
 /**
  * Pull the connected account's current state from Stripe into our DB.

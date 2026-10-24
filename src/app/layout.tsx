@@ -1,9 +1,8 @@
 import "~/styles/globals.css";
 import { Figtree } from "next/font/google";
-import { Toaster } from "sonner";
+import { AppToaster } from "~/components/AppToaster";
 import Navbar from "~/components/Navbar/Navbar";
 import { TooltipProvider } from "~/components/ui/tooltip";
-// import { usePathname } from "next/navigation";
 import { getUser } from "~/lib/session";
 import { UserProvider } from "~/components/Auth/userProvider";
 
@@ -38,11 +37,11 @@ export default async function RootLayout({
         <UserProvider user={user}>
           <Navbar />
           <TooltipProvider>
-            <div className="mx-auto flex min-h-screen w-full max-w-[950px] flex-col px-4 mt-[6rem] max-sm:py-10">
+            <div className="mx-auto mt-[6rem] flex min-h-screen w-full max-w-[1000px] flex-col px-4 max-sm:py-10">
               {children}
             </div>
           </TooltipProvider>
-          <Toaster theme="dark" />
+          <AppToaster />
         </UserProvider>
       </body>
     </html>

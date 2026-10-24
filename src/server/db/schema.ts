@@ -68,6 +68,8 @@ export const view = sqliteTable(
       .references(() => user.id, { onDelete: "set null" }),
     // Salted hash of ip + user agent. Used for uniqueness without storing raw IPs.
     visitorHash: d.text({ length: 64 }).notNull(),
+    ipHash: d.text({ length: 64 }),
+    impressionAt: d.integer({ mode: "timestamp" }),
 
     // Where from
     referrer: d.text({ length: 2048 }),
@@ -108,6 +110,8 @@ export const view = sqliteTable(
     index("link_view_viewer_idx").on(t.viewerId),
     index("link_view_country_idx").on(t.linkId, t.country),
     index("link_view_referrer_idx").on(t.linkId, t.referrerDomain),
+    index("link_view_ip_idx").on(t.ipHash, t.isBillable, t.createdAt),
+    index("link_view_link_ip_idx").on(t.linkId, t.ipHash, t.createdAt),
   ],
 );
 
@@ -231,7 +235,6 @@ export const verification = sqliteTable(
   }),
   (t) => [index("verification_identifier_idx").on(t.identifier)],
 );
-
 
 /**
  * Single-row settings table (id is always 1). This is where you change the fee.

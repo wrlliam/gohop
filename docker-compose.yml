@@ -1,0 +1,74 @@
+name: gohop
+
+# Values come from a .env file next to this file (or from Portainer's
+# "Environment variables" section). See .env.example.
+
+x-app-env: &app-env
+  DATABASE_URL: file:/data/db.sqlite
+  APP_URL: ${APP_URL:?set APP_URL}
+  # Auth (names match src/env.js from create-t3-app).
+  BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?set BETTER_AUTH_SECRET}
+  BETTER_AUTH_URL: ${APP_URL}
+  BETTER_AUTH_GITHUB_CLIENT_ID: ${BETTER_AUTH_GITHUB_CLIENT_ID:?set BETTER_AUTH_GITHUB_CLIENT_ID}
+  BETTER_AUTH_GITHUB_CLIENT_SECRET: ${BETTER_AUTH_GITHUB_CLIENT_SECRET:?set BETTER_AUTH_GITHUB_CLIENT_SECRET}
+  # Links and money
+  VISITOR_HASH_SALT: ${VISITOR_HASH_SALT:?set VISITOR_HASH_SALT}
+  STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:?set STRIPE_SECRET_KEY}
+  STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+  ADMIN_API_SECRET: ${ADMIN_API_SECRET:?set ADMIN_API_SECRET}
+
+services:
+  # Runs once per deploy, applies migrations, then exits.
+  migrate:
+    build:
+      context: .
+      target: migrate
+    image: gohop-migrate:latest
+    environment:
+      <<: *app-env
+    volumes:
+      - gohop-data:/data
+    restart: "no"
+
+  app:
+    build:
+      context: .
+      target: runner
+      args:
+        NEXT_PUBLIC_ADSENSE_CLIENT: ${NEXT_PUBLIC_ADSENSE_CLIENT:-}
+        NEXT_PUBLIC_ADSENSE_SLOT: ${NEXT_PUBLIC_ADSENSE_SLOT:-}
+    image: gohop:latest
+    restart: unless-stopped
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      <<: *app-env
+    volumes:
+      - gohop-data:/data
+    ports:
+      # Bind to a LAN address if the reverse proxy is on another machine,
+      # e.g. "192.168.1.20:4300:3000". Never publish this to the internet directly.
+      - "4300:3000"
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:3000/').then(r=>process.exit(r.status<500?0:1)).catch(()=>process.exit(1))"
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    # Hardening. If something unexpectedly can't write, check these first.
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /app/.next/cache
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  gohop-data:
