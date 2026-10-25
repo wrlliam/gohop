@@ -78,7 +78,7 @@ export async function startStripeOnboarding(): Promise<void> {
       },
       // Bump the suffix if you change these parameters (Stripe rejects a reused
       // key with different parameters for ~24h).
-      { idempotencyKey: `connect_account_v4_${user.id}` },
+      { idempotencyKey: `connect_account_v5_${user.id}` },
     );
 
     await db
