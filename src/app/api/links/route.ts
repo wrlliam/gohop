@@ -6,6 +6,7 @@ import { createId } from "~/lib/utils";
 import { db } from "~/server/db";
 import { redirects } from "~/server/db/schema";
 import { sql } from "drizzle-orm";
+import { env } from "~/env";
 
 export async function POST(request: NextRequest) {
   const session = await auth.api.getSession({ headers: request.headers });
@@ -59,7 +60,7 @@ export async function POST(request: NextRequest) {
   });
 
   return NextResponse.json(
-    { slug: finalSlug, shortUrl: `${request.nextUrl.origin}/~/${finalSlug}` },
+    { slug: finalSlug, shortUrl: `${env.APP_URL}/~/${finalSlug}` },
     { status: 201 },
   );
 }
