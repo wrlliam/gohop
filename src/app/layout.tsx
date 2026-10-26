@@ -23,6 +23,10 @@ export default async function RootLayout({
       <head>
         <title>gohop</title>
         <meta
+          name="google-adsense-account"
+          content="ca-pub-4391494793831066"
+        ></meta>
+        <meta
           name="description"
           content="Redirect your links, get analytics down to fine details, and get paid for sharing."
         />
